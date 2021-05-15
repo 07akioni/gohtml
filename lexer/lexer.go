@@ -1,7 +1,6 @@
 package lexer
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -27,18 +26,17 @@ type TokenPosition struct {
 }
 
 type Position struct {
-	index  int
-	column int
-	line   int
+	Index  int `json:"index"`
+	Column int `json:"column"`
+	Line   int `json:"line"`
 }
 
 func (l *Lexer) Lex() []Token {
 	inputLength := len(l.input)
-	for l.position.index < inputLength {
-		fmt.Println("position index", l.position.index)
-		startIndex := l.position.index
+	for l.position.Index < inputLength {
+		startIndex := l.position.Index
 		l.lexText()
-		if startIndex == l.position.index {
+		if startIndex == l.position.Index {
 			if strings.HasPrefix(l.input[startIndex:], "<!--") {
 				l.lexComment()
 			} else {
@@ -52,7 +50,7 @@ func (l *Lexer) Lex() []Token {
 var alphanumeric = regexp.MustCompile("[A-Za-z0-9]")
 
 func (l *Lexer) lexText() {
-	startIndex := l.position.index
+	startIndex := l.position.Index
 	endIndex := findTextEnd(l.input, startIndex)
 	startPosition := clonePosition(l.position)
 	if endIndex == startIndex {
@@ -90,8 +88,9 @@ func findTextEnd(input string, index int) int {
 
 func (l *Lexer) lexTag(pushToken bool) string {
 	// Lex tag start `<`
-	i := l.position.index
-	nextRune, _ := utf8.DecodeRuneInString(l.input[i:])
+	i := l.position.Index
+	_, width := utf8.DecodeRuneInString(l.input[i:])
+	nextRune, _ := utf8.DecodeRuneInString(l.input[i+width:])
 	close := nextRune == '/'
 	startPosition := clonePosition(l.position)
 	if close {
@@ -113,11 +112,9 @@ func (l *Lexer) lexTag(pushToken bool) string {
 	// Lex attrs
 	l.lexTagAttrs()
 	// Lex tag end `>`
-	i = l.position.index
+	i = l.position.Index
 	nextRune, _ = utf8.DecodeRuneInString(l.input[i:])
 	close = nextRune == '/'
-	fmt.Println("nextRune", string(nextRune), "index", i)
-	fmt.Printf("before tag end1 %+v\n", l.position)
 	if close {
 		// for `/>`
 		l.updatePosition(i + 2)
@@ -126,7 +123,6 @@ func (l *Lexer) lexTag(pushToken bool) string {
 		l.updatePosition(i + 1)
 	}
 	endPosition := clonePosition(l.position)
-	fmt.Printf("before tag end2 %+v", l.position)
 	if pushToken {
 		l.tokens = append(l.tokens, Token{
 			TokenType: "tag-end",
@@ -146,7 +142,7 @@ func (l *Lexer) lexTag(pushToken bool) string {
 // <xxx/>
 // we need to find start index and end index
 func (l *Lexer) lexTagName(pushToken bool) string {
-	startIndex := l.position.index
+	startIndex := l.position.Index
 	for startIndex < len(l.input) {
 		r, width := utf8.DecodeRuneInString(l.input[startIndex:])
 		if !isWhiteSpace(r) && r != '>' && r != '/' {
@@ -196,7 +192,7 @@ func (l *Lexer) lexTagAttrs() {
 	//   - For `key ='value'` `key = 'value'` `key= 'value'`
 	//   - For `key ="value"` `key = "value"` `key= "value"`
 	words := []string{}
-	i := l.position.index
+	i := l.position.Index
 	wordStartIndex := i
 	for i < len(l.input) {
 		r, width := utf8.DecodeRuneInString(l.input[i:])
@@ -238,11 +234,8 @@ func (l *Lexer) lexTagAttrs() {
 		i += width
 	}
 
-	fmt.Printf("%+q", words)
-
 	for i = 0; i < len(words); i += 1 {
 		word := words[i]
-		fmt.Println(i)
 		if strings.HasSuffix(word, "=") {
 			// `key=`, need value
 			name := word[0 : len(word)-1]
@@ -305,7 +298,7 @@ func (l *Lexer) lexTagAttrs() {
 }
 
 func (l *Lexer) lexComment() {
-	commentStartIndex := l.position.index
+	commentStartIndex := l.position.Index
 	contentEndIndex := strings.Index(l.input[commentStartIndex:], "-->")
 	commentEndIndex := contentEndIndex + 3
 	if contentEndIndex == -1 {
@@ -328,7 +321,7 @@ func (l *Lexer) lexComment() {
 
 // some tag need to be skipped, for example <script>xxx</script>
 func (l *Lexer) lexSkipTag(tagName string) {
-	i := l.position.index
+	i := l.position.Index
 	startPosition := clonePosition(l.position) // text start position
 	for i < len(l.input) {
 		closeTagIndex := i + strings.Index(l.input[i:], "</"+tagName)
@@ -341,7 +334,7 @@ func (l *Lexer) lexSkipTag(tagName string) {
 		if tagName == l.lexTag(false) {
 			l.tokens = append(l.tokens, Token{
 				TokenType: "text",
-				Content:   l.input[startPosition.index:l.position.index],
+				Content:   l.input[startPosition.Index:l.position.Index],
 				Position: TokenPosition{
 					Start: startPosition,
 					End:   clonePosition(l.position),
